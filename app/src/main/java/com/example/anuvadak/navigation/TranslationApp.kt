@@ -55,6 +55,9 @@ fun TranslationApp() {
             composable(Screen.TextToSpeech.route) {
                 TextToSpeechScreen()
             }
+            composable(Screen.ImageTranslation.route) {
+                ImageTranslationScreen()
+            }
         }
     }
 }

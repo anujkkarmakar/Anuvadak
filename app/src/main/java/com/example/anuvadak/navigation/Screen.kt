@@ -1,6 +1,8 @@
 package com.example.anuvadak.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.VolumeUp
@@ -29,11 +31,17 @@ sealed class Screen(
 
     object TextToSpeech : Screen(
         route = "text_to_speech",
-        icon = Icons.Default.VolumeUp,
+        icon = Icons.AutoMirrored.Filled.VolumeUp,
         label = "Speak"
     )
 
+    object ImageTranslation : Screen(
+        route = "image_translation",
+        icon = Icons.Default.Image,
+        label = "Image"
+    )
+
     companion object {
-        fun getAllScreens() = listOf(TextTranslation, SpeechTranslation, TextToSpeech)
+        fun getAllScreens() = listOf(TextTranslation, SpeechTranslation, TextToSpeech, ImageTranslation)
     }
 }
