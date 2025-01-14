@@ -63,11 +63,11 @@ class TextTranslationViewModel : ViewModel() {
         return when (language) {
             "English" -> TranslateLanguage.ENGLISH
             "Hindi" -> TranslateLanguage.HINDI
-            "Spanish" -> TranslateLanguage.SPANISH
-            "French" -> TranslateLanguage.FRENCH
-            "German" -> TranslateLanguage.GERMAN
-            "Japanese" -> TranslateLanguage.JAPANESE
-            "Chinese" -> TranslateLanguage.CHINESE
+//            "Spanish" -> TranslateLanguage.SPANISH
+//            "French" -> TranslateLanguage.FRENCH
+//            "German" -> TranslateLanguage.GERMAN
+//            "Japanese" -> TranslateLanguage.JAPANESE
+//            "Chinese" -> TranslateLanguage.CHINESE
             else -> TranslateLanguage.ENGLISH
         }
     }
@@ -310,7 +310,7 @@ private fun LanguageDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest
     ) {
-        listOf("English", "Hindi", "Spanish", "French", "German", "Japanese", "Chinese").forEach { language ->
+        listOf("English", "Hindi", /*"Spanish", "French", "German", "Japanese", "Chinese"*/).forEach { language ->
             DropdownMenuItem(
                 text = { Text(language) },
                 onClick = { onLanguageSelected(language) },

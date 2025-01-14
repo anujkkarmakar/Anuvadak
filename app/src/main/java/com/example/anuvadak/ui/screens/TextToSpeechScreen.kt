@@ -93,9 +93,9 @@ class TextToSpeechViewModel(private val context: Context) : ViewModel() {
         return when (language) {
             "English" -> TranslateLanguage.ENGLISH
             "Hindi" -> TranslateLanguage.HINDI
-            "Spanish" -> TranslateLanguage.SPANISH
-            "French" -> TranslateLanguage.FRENCH
-            "German" -> TranslateLanguage.GERMAN
+//            "Spanish" -> TranslateLanguage.SPANISH
+//            "French" -> TranslateLanguage.FRENCH
+//            "German" -> TranslateLanguage.GERMAN
             else -> TranslateLanguage.ENGLISH
         }
     }
@@ -104,9 +104,9 @@ class TextToSpeechViewModel(private val context: Context) : ViewModel() {
         return when (languageCode) {
             "en" -> "English"
             "hi" -> "Hindi"
-            "es" -> "Spanish"
-            "fr" -> "French"
-            "de" -> "German"
+//            "es" -> "Spanish"
+//            "fr" -> "French"
+//            "de" -> "German"
             else -> "English"
         }
     }
@@ -249,7 +249,7 @@ fun TextToSpeechScreen() {
                 expanded = showLanguageMenu,
                 onDismissRequest = { showLanguageMenu = false }
             ) {
-                listOf("English", "Hindi", "Spanish", "French", "German").forEach { language ->
+                listOf("English", "Hindi",/* "Spanish", "French", "German"*/).forEach { language ->
                     DropdownMenuItem(
                         text = { Text(language) },
                         onClick = {

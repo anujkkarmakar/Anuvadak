@@ -171,9 +171,9 @@ class ImageTranslationViewModel(private val context: Context) : ViewModel() {
         return when (language) {
             "English" -> TranslateLanguage.ENGLISH
             "Hindi" -> TranslateLanguage.HINDI
-            "Spanish" -> TranslateLanguage.SPANISH
-            "French" -> TranslateLanguage.FRENCH
-            "German" -> TranslateLanguage.GERMAN
+//            "Spanish" -> TranslateLanguage.SPANISH
+//            "French" -> TranslateLanguage.FRENCH
+//            "German" -> TranslateLanguage.GERMAN
             else -> TranslateLanguage.ENGLISH
         }
     }
@@ -279,7 +279,7 @@ fun ImageTranslationScreen(
                     onDismissRequest = { showLanguageMenu = false },
                     modifier = Modifier.fillMaxWidth(0.9f)
                 ) {
-                    listOf("English", "Hindi", "Spanish", "French", "German").forEach { language ->
+                    listOf("English", "Hindi", /*"Spanish", "French", "German"*/).forEach { language ->
                         DropdownMenuItem(
                             text = { Text(language) },
                             onClick = {
