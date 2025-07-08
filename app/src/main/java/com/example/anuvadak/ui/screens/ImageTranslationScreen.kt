@@ -1,11 +1,20 @@
 package com.example.anuvadak.ui.screens
 
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
-import android.provider.MediaStore
+import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,15 +22,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
@@ -37,6 +46,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -47,6 +60,7 @@ class ImageTranslationViewModel(private val context: Context) : ViewModel() {
 
     private var textRecognizer: TextRecognizer
     private var translator: Translator? = null
+    private var cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     init {
         textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -63,8 +77,9 @@ class ImageTranslationViewModel(private val context: Context) : ViewModel() {
             )
 
             try {
-                val tempFile = createTempImageFile(context, uri)
-                recognizeTextFromImage(tempFile)
+                // Create InputImage directly from URI
+                val image = InputImage.fromFilePath(context, uri)
+                recognizeTextFromImage(image)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
@@ -74,9 +89,30 @@ class ImageTranslationViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    private suspend fun recognizeTextFromImage(imageFile: File) {
+    fun processImageFromBitmap(bitmap: Bitmap) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isProcessing = true,
+                error = null,
+                recognizedText = "",
+                translatedText = ""
+            )
+
+            try {
+                // Create InputImage from Bitmap
+                val image = InputImage.fromBitmap(bitmap, 0)
+                recognizeTextFromImage(image)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    error = "Failed to process image: ${e.localizedMessage}"
+                )
+            }
+        }
+    }
+
+    private suspend fun recognizeTextFromImage(image: InputImage) {
         try {
-            val image = InputImage.fromFilePath(context, Uri.fromFile(imageFile))
             val result = suspendCoroutine { continuation ->
                 textRecognizer.process(image)
                     .addOnSuccessListener { text ->
@@ -92,14 +128,19 @@ class ImageTranslationViewModel(private val context: Context) : ViewModel() {
                 recognizedText = recognizedText
             )
 
-            translateRecognizedText(recognizedText)
+            if (recognizedText.isNotEmpty()) {
+                translateRecognizedText(recognizedText)
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    isProcessing = false,
+                    error = "No text found in the image. Please try with a clearer image containing text."
+                )
+            }
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isProcessing = false,
                 error = "Text recognition failed: ${e.localizedMessage}"
             )
-        } finally {
-            imageFile.delete()
         }
     }
 
@@ -171,9 +212,7 @@ class ImageTranslationViewModel(private val context: Context) : ViewModel() {
         return when (language) {
             "English" -> TranslateLanguage.ENGLISH
             "Hindi" -> TranslateLanguage.HINDI
-//            "Spanish" -> TranslateLanguage.SPANISH
-//            "French" -> TranslateLanguage.FRENCH
-//            "German" -> TranslateLanguage.GERMAN
+            "Bengali" -> TranslateLanguage.BENGALI
             else -> TranslateLanguage.ENGLISH
         }
     }
@@ -182,6 +221,7 @@ class ImageTranslationViewModel(private val context: Context) : ViewModel() {
         super.onCleared()
         translator?.close()
         textRecognizer.close()
+        cameraExecutor.shutdown()
     }
 }
 
@@ -193,7 +233,8 @@ data class ImageTranslationState(
     val targetLanguage: String = "Hindi",
     val isModelDownloaded: Boolean = false,
     val lastCapturedImageUri: Uri? = null,
-    val sourceLanguage: String? = null
+    val sourceLanguage: String? = null,
+    val showCameraPreview: Boolean = false
 )
 
 class ImageTranslationViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
@@ -208,24 +249,36 @@ class ImageTranslationViewModelFactory(private val context: Context) : ViewModel
 
 @Composable
 fun ImageTranslationScreen(
-    viewModel: ImageTranslationViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+    viewModel: ImageTranslationViewModel = viewModel(
         factory = ImageTranslationViewModelFactory(LocalContext.current)
     )
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showLanguageMenu by remember { mutableStateOf(false) }
+    var showCameraOptions by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
-    // Camera launcher
+    // Create a file for camera capture
+    val photoFile = remember {
+        createImageFile(context)
+    }
+    val photoUri = remember {
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            photoFile
+        )
+    }
+
+    // Camera launcher for full-size image capture
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            result.data?.extras?.get("data")?.let { imageBitmap ->
-                val uri = saveBitmapToUri(context, imageBitmap as Bitmap)
-                uri?.let { viewModel.processImageFromUri(it) }
-            }
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            // Process the captured image from the file
+            viewModel.processImageFromUri(photoUri)
         }
     }
 
@@ -234,6 +287,45 @@ fun ImageTranslationScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { viewModel.processImageFromUri(it) }
+    }
+
+    // Camera options dialog
+    if (showCameraOptions) {
+        AlertDialog(
+            onDismissRequest = { showCameraOptions = false },
+            title = { Text("Select Image Source") },
+            text = { Text("Choose how you want to capture the image") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCameraOptions = false
+                        cameraLauncher.launch(photoUri)
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.Camera,
+                        contentDescription = "Camera",
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text("Camera")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showCameraOptions = false
+                        galleryLauncher.launch("image/*")
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.Photo,
+                        contentDescription = "Gallery",
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text("Gallery")
+                }
+            }
+        )
     }
 
     Column(
@@ -279,7 +371,7 @@ fun ImageTranslationScreen(
                     onDismissRequest = { showLanguageMenu = false },
                     modifier = Modifier.fillMaxWidth(0.9f)
                 ) {
-                    listOf("English", "Hindi", /*"Spanish", "French", "German"*/).forEach { language ->
+                    listOf("English", "Hindi", "Bengali").forEach { language ->
                         DropdownMenuItem(
                             text = { Text(language) },
                             onClick = {
@@ -305,8 +397,7 @@ fun ImageTranslationScreen(
             ) {
                 Button(
                     onClick = {
-                        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-                        cameraLauncher.launch(intent)
+                        cameraLauncher.launch(photoUri)
                     }
                 ) {
                     Icon(
@@ -342,9 +433,29 @@ fun ImageTranslationScreen(
         ) {
             // Processing Indicator
             if (state.isProcessing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.padding(16.dp)
-                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .padding(end = 16.dp)
+                        )
+                        Text(
+                            text = "Processing image and extracting text...",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
             }
 
             // Error Message
@@ -357,11 +468,22 @@ fun ImageTranslationScreen(
                         containerColor = MaterialTheme.colorScheme.errorContainer
                     )
                 ) {
-                    Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Error,
+                            contentDescription = "Error",
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
 
@@ -375,12 +497,23 @@ fun ImageTranslationScreen(
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
-                        Text(
-                            text = "Recognized Text:",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                        ) {
+                            Icon(
+                                Icons.Default.TextFields,
+                                contentDescription = "Recognized Text",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "Recognized Text:",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            )
+                        }
                         Text(
                             text = state.recognizedText,
                             style = MaterialTheme.typography.bodyLarge
@@ -399,15 +532,64 @@ fun ImageTranslationScreen(
                     Column(
                         modifier = Modifier.padding(16.dp)
                     ) {
-                        Text(
-                            text = "Translation:",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                        ) {
+                            Icon(
+                                Icons.Default.Translate,
+                                contentDescription = "Translation",
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "Translation:",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            )
+                        }
                         Text(
                             text = state.translatedText,
                             style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            // Help Text when no content
+            if (!state.isProcessing && state.recognizedText.isEmpty() && state.error == null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.CameraAlt,
+                            contentDescription = "Camera",
+                            modifier = Modifier
+                                .size(48.dp)
+                                .padding(bottom = 16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Capture or Select an Image",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = "Take a photo or choose an image from your gallery to extract and translate text",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }
@@ -419,28 +601,9 @@ fun ImageTranslationScreen(
     }
 }
 
-// Utility functions
-private fun createTempImageFile(context: Context, uri: Uri): File {
-    val inputStream = context.contentResolver.openInputStream(uri)
-    val tempFile = File.createTempFile("temp_image", ".jpg", context.cacheDir)
-
-    inputStream?.use { input ->
-        FileOutputStream(tempFile).use { output ->
-            input.copyTo(output)
-        }
-    }
-
-    return tempFile
-}
-
-private fun saveBitmapToUri(context: Context, bitmap: Bitmap): Uri? {
-    return try {
-        val file = File(context.cacheDir, "temp_${System.currentTimeMillis()}.jpg")
-        FileOutputStream(file).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
-        }
-        Uri.fromFile(file)
-    } catch (e: Exception) {
-        null
-    }
+// Utility function to create image file
+private fun createImageFile(context: Context): File {
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+    val storageDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+    return File.createTempFile("IMG_${timeStamp}_", ".jpg", storageDir)
 }

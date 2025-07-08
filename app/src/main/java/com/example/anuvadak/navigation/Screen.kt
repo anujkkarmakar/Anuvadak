@@ -2,10 +2,7 @@ package com.example.anuvadak.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -17,6 +14,18 @@ sealed class Screen(
     val icon: ImageVector,
     val label: String
 ) {
+    object Authentication : Screen(
+        route = "auth",
+        icon = Icons.Default.Login,
+        label = "Authentication"
+    )
+
+    object Home : Screen(
+        route = "home",
+        icon = Icons.Default.Home,
+        label = "Home"
+    )
+
     object TextTranslation : Screen(
         route = "text_translation",
         icon = Icons.Default.TextFields,
@@ -41,7 +50,72 @@ sealed class Screen(
         label = "Image"
     )
 
+    object GestureRecognition : Screen(
+        route = "gesture_recognition",
+        icon = Icons.Default.PanTool,
+        label = "Gesture"
+    )
+
+    object FeedbackScreen : Screen(
+        route = "feedback_screen",
+        icon = Icons.Default.Feedback,
+        label = "Feedback"
+    )
+
+    object AboutUs : Screen(
+        route = "about_us",
+        icon = Icons.Default.Info,
+        label = "About Us"
+    )
+
     companion object {
-        fun getAllScreens() = listOf(TextTranslation, SpeechTranslation, TextToSpeech, ImageTranslation)
+        fun getAllScreens() = listOf(
+            Authentication,
+            Home,
+            TextTranslation,
+            SpeechTranslation,
+            TextToSpeech,
+            ImageTranslation,
+            GestureRecognition,
+            FeedbackScreen,
+            AboutUs
+        )
+
+        fun getBottomNavScreens() = listOf(
+            TextTranslation,
+            SpeechTranslation,
+            TextToSpeech,
+            ImageTranslation,
+            GestureRecognition
+        )
+
+        fun getMainFeatureScreens() = listOf(
+            TextTranslation,
+            SpeechTranslation,
+            TextToSpeech,
+            ImageTranslation,
+            GestureRecognition
+        )
+
+        fun getInfoScreens() = listOf(
+            FeedbackScreen,
+            AboutUs
+        )
+
+        // Get a screen by its route (useful for navigation actions)
+        fun getScreenByRoute(route: String?): Screen? {
+            return when(route) {
+                Authentication.route -> Authentication
+                Home.route -> Home
+                TextTranslation.route -> TextTranslation
+                SpeechTranslation.route -> SpeechTranslation
+                TextToSpeech.route -> TextToSpeech
+                ImageTranslation.route -> ImageTranslation
+                GestureRecognition.route -> GestureRecognition
+                FeedbackScreen.route -> FeedbackScreen
+                AboutUs.route -> AboutUs
+                else -> null
+            }
+        }
     }
 }

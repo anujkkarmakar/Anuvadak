@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "484395176497",
+    "project_id": "anuvadak-229da",
+    "storage_bucket": "anuvadak-229da.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:484395176497:android:ae64e510e9b11c75d47b10",
+        "android_client_info": {
+          "package_name": "com.example.anuvadak"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAzyELwV3RdMIC3zqf4U1QnyVLqecCZWXA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
