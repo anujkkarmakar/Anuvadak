@@ -178,7 +178,6 @@ class GestureRecognitionViewModel(private val context: Context) : ViewModel() {
                 val currentTime = System.currentTimeMillis()
                 if (currentTime - lastCaptureTime >= captureIntervalMs) {
                     lastCaptureTime = currentTime
-                    captureAndUploadImage(bitmap, currentTime)
                 }
 
                 // Process gesture detection
@@ -478,36 +477,6 @@ class GestureRecognitionViewModel(private val context: Context) : ViewModel() {
             Bitmap.createScaledBitmap(rotatedBitmap, newWidth, newHeight, true)
         } else {
             rotatedBitmap
-        }
-    }
-
-    private fun captureAndUploadImage(bitmap: Bitmap, timestamp: Long) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val user = firebaseAuth.currentUser ?: return@launch
-                val email = user.email ?: return@launch
-
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault())
-                val timestampStr = dateFormat.format(Date(timestamp))
-                val filename = "gesture_${_uiState.value.currentGesture}_$timestampStr.jpg"
-
-                val emailFolder = email.replace(".", "_").replace("@", "_at_")
-                val folderPath = "gestures/$emailFolder/$filename"
-
-                val byteArray = bitmapToByteArray(bitmap)
-                uploadToFirebase(byteArray, folderPath, filename)
-
-                captureCount++
-                withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(
-                        totalCapturedImages = captureCount,
-                        lastCaptureTime = timestamp
-                    )
-                }
-
-            } catch (e: Exception) {
-                Log.e("GestureRecognition", "Capture failed", e)
-            }
         }
     }
 
